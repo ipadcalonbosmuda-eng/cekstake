@@ -3,218 +3,294 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Portfolio Hedged Tracker — Multi Token (DexScreener)</title>
+<title>Composition Balance Calculator — DexScreener Pair</title>
 <style>
-  :root{--bg:#0b0f13;--card:#141a21;--text:#e8eef6;--muted:#9db0c2;--accent:#4fd1c5;--bad:#ff7878;--good:#8be28b}
+  :root { --bg:#0b0f13; --card:#141a21; --text:#e8eef6; --muted:#9db0c2; --accent:#4fd1c5; --bad:#ff7878; --good:#8be28b;}
   *{box-sizing:border-box}
   body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Inter,Roboto,Arial;background:var(--bg);color:var(--text)}
   header{padding:18px 20px;text-align:center;border-bottom:1px solid #1e2630;background:linear-gradient(180deg,#0f141a,#0b0f13)}
-  main{max-width:1100px;margin:22px auto;padding:0 14px 60px}
+  main{max-width:1080px;margin:22px auto;padding:0 14px 60px}
   h1{margin:0;font-size:20px}
   h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:700}
   .card{background:var(--card);border:1px solid #1f2933;border-radius:14px;padding:16px;margin:12px 0;box-shadow:0 10px 30px rgba(0,0,0,.25)}
   label{display:block;font-size:12px;color:var(--muted);margin:8px 0 6px}
   input{width:100%;padding:11px;border-radius:10px;background:#0d1217;border:1px solid #243140;color:var(--text);font-size:14px}
   input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,209,197,.12)}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .btn{cursor:pointer;background:var(--accent);color:#052b27;border:0;border-radius:10px;padding:10px 14px;font-weight:700}
-  .btn.secondary{background:#0f171f;color:var(--muted);border:1px solid #223041}
   .pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#0f171f;border:1px solid #223041;color:var(--muted);font-size:12px}
+  .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:8px}
+  .kpi .item{background:#0f141a;border:1px solid #1f2a35;border-radius:12px;padding:14px}
+  .kpi .label{font-size:12px;color:var(--muted)}
+  .kpi .value{font-size:22px;margin-top:6px}
   .ok{color:var(--good)} .warn{color:var(--bad)}
   table{width:100%;border-collapse:separate;border-spacing:0 10px}
-  th,td{padding:12px 14px;text-align:left}
+  th, td{padding:12px 14px;text-align:left}
   th{color:var(--muted);font-weight:600}
   tr.cardrow{background:#0f141a;border:1px solid #1f2a35}
   tr.cardrow td:first-child{border-top-left-radius:10px;border-bottom-left-radius:10px}
   tr.cardrow td:last-child{border-top-right-radius:10px;border-bottom-right-radius:10px}
   .small{color:var(--muted);font-size:12px}
+  a{color:#8bbbd0;text-decoration:none}
 </style>
 </head>
 <body>
 <header>
-  <h1>Portfolio Hedged Tracker</h1>
-  <div class="pill">Harga: DexScreener pair • ETH/USDT: Binance</div>
+  <h1>Composition Balance Calculator</h1>
+  <div class="small">Tempel <b>DexScreener pair URL</b>. Bandingkan <b>modal awal</b> vs <b>komposisi sekarang</b>, cek apakah <b>surplus quote</b> cukup nutup <b>defisit base</b> (dan sebaliknya). Harga live.</div>
 </header>
 
 <main>
   <div class="card">
-    <h2>Tambah Posisi</h2>
+    <h2>1) Pair & Harga</h2>
     <div class="grid">
-      <div style="grid-column:span 2">
-        <label>DexScreener Pair URL (contoh: https://dexscreener.com/base/0xff86...)</label>
-        <input id="pairUrl" />
+      <div style="grid-column:span 2;">
+        <label>DexScreener Pair URL</label>
+        <input id="pairUrl" placeholder="https://dexscreener.com/base/<pairAddress>" value="" />
       </div>
       <div>
-        <label>Nama (opsional)</label>
-        <input id="name" placeholder="CARV farming / ZORA LP" />
-      </div>
-      <div>
-        <label>Modal awal kamu (USD) — dana sendiri</label>
-        <input id="initialUsd" value="0" />
-      </div>
-      <div>
-        <label>Base sekarang (token)</label>
-        <input id="baseNow" value="0" />
-      </div>
-      <div>
-        <label>Quote sekarang (USDC/WETH/…)</label>
-        <input id="quoteNow" value="0" />
-      </div>
-      <div>
-        <label><input type="checkbox" id="isLoaned" /> Base dipinjam?</label>
-        <input id="baseDebt" value="0" />
-        <div class="small">Isi utang base (token). Kalau hedged total → ≈ baseNow.</div>
+        <label>Refresh interval (detik)</label>
+        <input id="intervalSec" value="15" />
       </div>
     </div>
     <div class="row" style="margin-top:10px">
-      <button class="btn" id="add">Tambah ke daftar</button>
-      <button class="btn secondary" id="clearAll">Hapus semua</button>
+      <button class="btn" id="refresh">Refresh</button>
       <span class="pill" id="status">Idle</span>
     </div>
   </div>
 
   <div class="card">
-    <h2>Daftar Posisi</h2>
-    <div id="list"></div>
+    <h2>2) Modal Awal (target komposisi)</h2>
+    <div class="grid">
+      <div>
+        <label>Base awal (token)</label>
+        <input id="initBase" placeholder="contoh 10000" />
+      </div>
+      <div>
+        <label>Quote awal (USDC/WETH/...)</label>
+        <input id="initQuote" placeholder="contoh 10" />
+      </div>
+    </div>
+    <div class="small" style="margin-top:6px">
+      Ini komposisi patokanmu (mis. 10,000 CARV & 10 USDC).
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3) Komposisi Sekarang</h2>
+    <div class="grid">
+      <div>
+        <label>Base sekarang (token)</label>
+        <input id="nowBase" placeholder="contoh 5000" />
+      </div>
+      <div>
+        <label>Quote sekarang (USDC/WETH/...)</label>
+        <input id="nowQuote" placeholder="contoh 1000" />
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>4) Ringkasan Harga</h2>
+    <div class="kpi">
+      <div class="item"><div class="label">Pair</div><div class="value" id="kpiPair">–</div></div>
+      <div class="item"><div class="label">Harga Base (USD)</div><div class="value" id="kpiBaseUsd">$ –</div></div>
+      <div class="item"><div class="label">Harga Quote (USD)</div><div class="value" id="kpiQuoteUsd">$ –</div></div>
+      <div class="item"><div class="label">Nilai Awal (USD)</div><div class="value" id="kpiInitUsd">$ –</div></div>
+      <div class="item"><div class="label">Nilai Sekarang (USD)</div><div class="value" id="kpiNowUsd">$ –</div></div>
+      <div class="item"><div class="label">PnL (USD)</div><div class="value" id="kpiPnL">$ –</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>5) Analisis Komposisi & Rebalance</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Metrix</th>
+          <th>Jumlah</th>
+          <th>Ekuivalen USD</th>
+          <th>Keterangan</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <!-- rows injected -->
+      </tbody>
+    </table>
+    <div class="small" style="margin-top:8px">
+      *“Cukup nutup?” artinya surplus aset A bisa menutupi defisit aset B jika dikonversi dengan harga live saat ini.
+    </div>
   </div>
 </main>
 
 <script>
-/* ==== helpers ==== */
 const $ = (id)=>document.getElementById(id);
 function parseFlex(v){ v=String(v??'').trim().replace(/\s/g,'').replace(',', '.'); if(!v) return NaN; const n=Number(v); return isFinite(n)?n:NaN; }
 function fmt(n,d=6){ if(!isFinite(n)) return '–'; return Number(n).toLocaleString(undefined,{maximumFractionDigits:d}); }
 function setStatus(s){ $('status').textContent=s; }
-const STOR='hedged_positions_v1';
-const load=()=>{try{return JSON.parse(localStorage.getItem(STOR)||'[]')}catch{return[]}};
-const save=(s)=>localStorage.setItem(STOR,JSON.stringify(s));
 
-/* ==== price fetch ==== */
 async function fetchEthUsd(){
   try{
-    const r=await fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT',{cache:'no-store'});
-    const j=await r.json(); const px=Number(j.price); return isFinite(px)?px:NaN;
-  }catch{ return NaN }
-}
-async function fetchPairData(pairUrl){
-  const u=new URL(pairUrl);
-  const [chain,pair]=u.pathname.split('/').filter(Boolean);
-  const r=await fetch(`https://api.dexscreener.com/latest/dex/pairs/${chain}/${pair}`,{cache:'no-store'});
-  return r.json(); // {pair:{priceUsd, baseToken, quoteToken, quotePriceUsd}}
+    const r = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT',{cache:'no-store'});
+    const j = await r.json();
+    const px = Number(j?.price);
+    return isFinite(px) ? px : NaN;
+  }catch{ return NaN; }
 }
 
-/* ==== compute ==== */
-async function compute(p){
-  const j = await fetchPairData(p.pairUrl);
-  const baseUsd = Number(j?.pair?.priceUsd);
-  const baseSym = (j?.pair?.baseToken?.symbol||'BASE').toUpperCase();
-  const quoteSym= (j?.pair?.quoteToken?.symbol||'QUOTE').toUpperCase();
-  if(!isFinite(baseUsd)) throw new Error('price missing');
-
-  let quoteUsd = 1;
-  if(['USDC','USDT','USDCE','USDC.E','DAI'].includes(quoteSym)){ quoteUsd=1; }
-  else if(['WETH','ETH'].includes(quoteSym)){ quoteUsd=await fetchEthUsd(); }
-  else { const qp=Number(j?.pair?.quotePriceUsd); if(isFinite(qp)) quoteUsd=qp; }
-
-  const baseNow=parseFlex(p.baseNow), quoteNow=parseFlex(p.quoteNow), initUsd=parseFlex(p.initialUsd);
-  const debt = p.isLoaned ? parseFlex(p.baseDebt) : 0;
-
-  const netBase = (p.isLoaned && isFinite(debt)) ? (baseNow - debt) : baseNow; // token
-  const netUsd  = quoteNow*quoteUsd + netBase*baseUsd;                         // nilai bersih
-  const pnlUsd  = isFinite(initUsd) ? (netUsd - initUsd) : NaN;
-
-  // repay simulation (kalau base dipinjam)
-  let surplusBase=0, deficitBase=0, needUsd=0, leftUsd=quoteNow*quoteUsd;
-  if(p.isLoaned && isFinite(debt)){
-    const diff = baseNow - debt;
-    if(diff>=0){ surplusBase=diff; }
-    else { deficitBase=Math.abs(diff); needUsd=deficitBase*baseUsd; leftUsd -= needUsd; }
-  }
-
-  return {baseSym,quoteSym,baseUsd,quoteUsd,netBase,netUsd,pnlUsd,surplusBase,deficitBase,needUsd,leftUsd};
+async function fetchPairData(){
+  const url = $('pairUrl').value.trim();
+  if(!url) throw new Error('empty url');
+  const u = new URL(url);
+  const [chain, pair] = u.pathname.split('/').filter(Boolean);
+  const r = await fetch(`https://api.dexscreener.com/latest/dex/pairs/${chain}/${pair}`, {cache:'no-store'});
+  return r.json(); // { pair: { priceUsd, baseToken{symbol}, quoteToken{symbol}, quotePriceUsd? } }
 }
 
-/* ==== UI ==== */
-async function render(){
-  const arr=load(); const root=$('list'); root.innerHTML='';
-  if(arr.length===0){ root.innerHTML='<div class="small">Belum ada posisi. Tambah di atas.</div>'; return; }
+function row(label, qtyStr, usdStr, note){
+  const tr = document.createElement('tr');
+  tr.className = 'cardrow';
+  tr.innerHTML = `<td>${label}</td><td>${qtyStr}</td><td>${usdStr}</td><td>${note||''}</td>`;
+  return tr;
+}
 
-  for(let i=0;i<arr.length;i++){
-    const p=arr[i]; let data=null, err=null;
-    try{ data=await compute(p); }catch(e){ err=e; }
+async function refreshNow(){
+  try{
+    setStatus('Ambil harga…');
+    const j = await fetchPairData();
+    const baseSym = (j?.pair?.baseToken?.symbol || 'BASE').toUpperCase();
+    const quoteSym = (j?.pair?.quoteToken?.symbol || 'QUOTE').toUpperCase();
+    const baseUsd = Number(j?.pair?.priceUsd);
+    if(!isFinite(baseUsd)) throw new Error('bad base price');
 
-    const card=document.createElement('div'); card.className='card';
-    const title = p.name || 'Posisi ' + (i+1);
-    const head = `
-      <div class="row" style="justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-weight:700">${title}</div>
-          <div class="small"><a href="${p.pairUrl}" target="_blank" style="color:#8bbbd0;text-decoration:none">${p.pairUrl}</a></div>
-        </div>
-        <div class="row">
-          <button class="btn secondary" data-edit="${i}">Edit</button>
-          <button class="btn secondary" data-del="${i}">Hapus</button>
-        </div>
-      </div>`;
-    card.insertAdjacentHTML('beforeend', head);
-
-    const body=document.createElement('div'); body.style.marginTop='12px';
-    if(!data){
-      body.innerHTML='<span class="pill">Fetch gagal — cek URL / rate limit</span>';
-    }else{
-      body.innerHTML = `
-      <table>
-        <thead><tr><th>Metrix</th><th>Nilai</th><th>Keterangan</th></tr></thead>
-        <tbody>
-          <tr class="cardrow"><td>Pair</td><td>${data.baseSym}/${data.quoteSym}</td><td>Base/Quote</td></tr>
-          <tr class="cardrow"><td>Harga ${data.baseSym}</td><td>$ ${fmt(data.baseUsd,6)}</td><td>DexScreener</td></tr>
-          <tr class="cardrow"><td>Harga ${data.quoteSym}</td><td>$ ${fmt(data.quoteUsd,6)}</td><td>${['USDC','USDT','DAI'].includes(data.quoteSym)?'stable ~ 1':'live'}</td></tr>
-          <tr class="cardrow"><td>Net Exposure Base</td><td>${fmt(data.netBase)} ${data.baseSym}</td><td>${arr[i].isLoaned?'(baseNow - debt)':'baseNow'}</td></tr>
-          <tr class="cardrow"><td>Nilai Bersih Portofolio</td><td>$ ${fmt(data.netUsd,2)}</td><td>Quote + NetBase×Harga</td></tr>
-          <tr class="cardrow"><td>PNL vs Modal USD</td><td>${data.pnlUsd>=0?'<span class="ok">+ $ '+fmt(data.pnlUsd,2)+'</span>':'<span class="warn">- $ '+fmt(Math.abs(data.pnlUsd),2)+'</span>'}</td><td>Modal: $ ${fmt(parseFlex(p.initialUsd),2)}</td></tr>
-          <tr class="cardrow"><td>Surplus Base (setelah tebus)</td><td>${fmt(data.surplusBase)} ${data.baseSym}</td><td>$ ${fmt(data.surplusBase*data.baseUsd,2)}</td></tr>
-          <tr class="cardrow"><td>Kekurangan Base (untuk lunasi)</td><td>${fmt(data.deficitBase)} ${data.baseSym}</td><td>$ ${fmt(data.needUsd,2)} diperlukan</td></tr>
-          <tr class="cardrow"><td>USDC tersisa sesudah lunasi</td><td>$ ${fmt(data.leftUsd,2)}</td><td>Estimasi</td></tr>
-        </tbody>
-      </table>`;
+    // Quote USD
+    let quoteUsd = 1;
+    if(['USDC','USDT','DAI','USDCE','USDC.E'].includes(quoteSym)){ quoteUsd = 1; }
+    else if(['WETH','ETH'].includes(quoteSym)){ quoteUsd = await fetchEthUsd(); }
+    else {
+      const qp = Number(j?.pair?.quotePriceUsd);
+      if(isFinite(qp)) quoteUsd = qp;
     }
-    card.appendChild(body);
-    root.appendChild(card);
 
-    card.querySelector(`[data-del="${i}"]`).onclick=()=>{ const s=load(); s.splice(i,1); save(s); render(); };
-    card.querySelector(`[data-edit="${i}"]`).onclick=()=>{
-      $('pairUrl').value=p.pairUrl; $('name').value=p.name||'';
-      $('initialUsd').value=p.initialUsd||'0'; $('baseNow').value=p.baseNow||'0'; $('quoteNow').value=p.quoteNow||'0';
-      $('isLoaned').checked=!!p.isLoaned; $('baseDebt').value=p.baseDebt||'0'; window.scrollTo({top:0,behavior:'smooth'});
-    };
+    // Inputs
+    const initBase = parseFlex($('initBase').value);
+    const initQuote= parseFlex($('initQuote').value);
+    const nowBase  = parseFlex($('nowBase').value);
+    const nowQuote = parseFlex($('nowQuote').value);
+    if(![initBase,initQuote,nowBase,nowQuote].every(isFinite)) { setStatus('Isi semua angka'); return; }
+
+    // Values (USD)
+    const initUsd = initBase*baseUsd + initQuote*quoteUsd;
+    const nowUsd  = nowBase*baseUsd  + nowQuote*quoteUsd;
+    const pnlUsd  = nowUsd - initUsd;
+
+    // Deltas
+    const dBase   = nowBase  - initBase;           // + surplus base / - defisit base
+    const dQuote  = nowQuote - initQuote;          // + surplus quote / - defisit quote
+    const dBaseUsd  = dBase  * baseUsd;
+    const dQuoteUsd = dQuote * quoteUsd;
+
+    // Coverage checks (rebalance):
+    // 1) Jika defisit base, cek apakah surplus quote cukup untuk beli base yang kurang
+    // 2) Jika defisit quote, cek apakah surplus base cukup dijual untuk nutup quote yang kurang
+    let needBase=0, coverBaseByQuote=0, baseCovered=false, baseShortUsd=0;
+    if(dBase < 0){ // kekurangan base
+      needBase = Math.abs(dBase);
+      const quoteSurplusUsd = Math.max(0, dQuote) * quoteUsd;
+      coverBaseByQuote = quoteSurplusUsd / baseUsd; // berapa base bisa dibeli
+      baseCovered = coverBaseByQuote >= needBase - 1e-12;
+      baseShortUsd = Math.max(0, (needBase - coverBaseByQuote) * baseUsd); // USD masih kurang
+    }
+
+    let needQuote=0, coverQuoteByBaseUsd=0, quoteCovered=false, quoteShortUsd=0;
+    if(dQuote < 0){ // kekurangan quote
+      needQuote = Math.abs(dQuote);
+      const baseSurplusUsd = Math.max(0, dBase) * baseUsd;
+      coverQuoteByBaseUsd = baseSurplusUsd; // USD hasil jual base surplus
+      quoteCovered = coverQuoteByBaseUsd >= needQuote*quoteUsd - 1e-12;
+      quoteShortUsd = Math.max(0, needQuote*quoteUsd - coverQuoteByBaseUsd);
+    }
+
+    // Render KPIs
+    $('kpiPair').textContent = `${baseSym}/${quoteSym}`;
+    $('kpiBaseUsd').textContent  = '$ ' + fmt(baseUsd, 6);
+    $('kpiQuoteUsd').textContent = '$ ' + fmt(quoteUsd, 6);
+    $('kpiInitUsd').textContent  = '$ ' + fmt(initUsd, 2);
+    $('kpiNowUsd').textContent   = '$ ' + fmt(nowUsd, 2);
+    $('kpiPnL').textContent      = (pnlUsd>=0?'+ ':'- ') + '$ ' + fmt(Math.abs(pnlUsd), 2);
+    $('kpiPnL').className = 'value ' + (pnlUsd>=0 ? 'ok' : 'warn');
+
+    // Table rows
+    const tb = $('tbody'); tb.innerHTML = '';
+    tb.appendChild(row(`Δ ${baseSym}`, `${(dBase>=0?'+':'')}${fmt(dBase)} ${baseSym}`, `$ ${fmt(dBaseUsd,2)}`, dBase>=0?'Surplus base':'Defisit base'));
+    tb.appendChild(row(`Δ ${quoteSym}`, `${(dQuote>=0?'+':'')}${fmt(dQuote)} ${quoteSym}`, `$ ${fmt(dQuoteUsd,2)}`, dQuote>=0?'Surplus quote':'Defisit quote'));
+
+    if(dBase < 0){
+      tb.appendChild(row(`Quote → ${baseSym} (potensi beli)`,
+        `${fmt(coverBaseByQuote)} ${baseSym}`,
+        `$ ${fmt(Math.max(0, Math.max(0,dQuote)*quoteUsd),2)}`,
+        (baseCovered? '✅ Cukup nutup kekurangan base' : '❌ Belum cukup (lihat “Base short”)')
+      ));
+      tb.appendChild(row(`${baseSym} short (setelah pakai seluruh surplus quote)`,
+        `${fmt(Math.max(0, needBase - coverBaseByQuote))} ${baseSym}`,
+        `$ ${fmt(baseShortUsd,2)}`,
+        baseShortUsd>0? `Masih kurang USD sebesar ini untuk beli ${baseSym}`:''
+      ));
+    }
+
+    if(dQuote < 0){
+      const baseForQuote = Math.max(0,dBase); // berapa base bisa dijual
+      tb.appendChild(row(`${baseSym} → ${quoteSym} (potensi jual)`,
+        `${fmt(baseForQuote)} ${baseSym}`,
+        `$ ${fmt(coverQuoteByBaseUsd,2)}`,
+        (quoteCovered? '✅ Cukup nutup kekurangan quote' : '❌ Belum cukup (lihat “Quote short”)')
+      ));
+      tb.appendChild(row(`Quote short (setelah jual seluruh surplus base)`,
+        `${fmt(Math.max(0, needQuote - coverQuoteByBaseUsd/quoteUsd))} ${quoteSym}`,
+        `$ ${fmt(quoteShortUsd,2)}`,
+        quoteShortUsd>0? `Masih butuh USD sebesar ini untuk penuhi quote`:''
+      ));
+    }
+
+    // Ringkasan cepat “cukup/ga cukup” (kedua arah)
+    if(dBase < 0 || dQuote < 0){
+      const note = document.createElement('tr');
+      note.className = 'cardrow';
+      const canBase = (dBase>=0) ? '—' : (baseCovered? '✅ Ya' : '❌ Tidak');
+      const canQuote= (dQuote>=0) ? '—' : (quoteCovered? '✅ Ya' : '❌ Tidak');
+      note.innerHTML = `<td>Surplus cukup nutup defisit?</td>
+                        <td>Base: ${canBase} | Quote: ${canQuote}</td>
+                        <td></td>
+                        <td>Evaluasi dua arah (quote→base dan base→quote)</td>`;
+      tb.appendChild(note);
+    }
+
+    setStatus('Live OK');
+  }catch(e){
+    console.error(e);
+    setStatus('Fetch fail / input belum lengkap');
   }
 }
 
-/* ==== add / clear ==== */
-$('add').onclick=()=>{
-  const obj={
-    pairUrl:$('pairUrl').value.trim(),
-    name:$('name').value.trim(),
-    initialUsd:$('initialUsd').value.trim(),
-    baseNow:$('baseNow').value.trim(),
-    quoteNow:$('quoteNow').value.trim(),
-    isLoaned:$('isLoaned').checked,
-    baseDebt:$('baseDebt').value.trim()
-  };
-  if(!obj.pairUrl){ setStatus('URL pair wajib diisi'); return; }
-  const s=load(); s.push(obj); save(s); setStatus('Ditambahkan'); render();
-};
-$('clearAll').onclick=()=>{ save([]); render(); setStatus('Semua posisi dihapus'); };
+// Events
+$('refresh').addEventListener('click', refreshNow);
+['pairUrl','initBase','initQuote','nowBase','nowQuote'].forEach(id=>{
+  $(id).addEventListener('input', refreshNow);
+});
 
-/* ==== auto refresh ==== */
+// Auto refresh
 let timer=null;
-async function loop(){
-  await render();
-  if(timer) clearTimeout(timer);
-  timer=setTimeout(loop, 20*1000);
+function startAuto(){
+  if(timer) clearInterval(timer);
+  const sec = Math.max(5, parseInt($('intervalSec').value || '15', 10));
+  timer = setInterval(refreshNow, sec*1000);
 }
-loop();
+$('intervalSec').addEventListener('input', startAuto);
+
+// Init
+refreshNow();
+startAuto();
 </script>
 </body>
 </html>
