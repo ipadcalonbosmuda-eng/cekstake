@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Farming / Staking Tracker — Multi-Position (DexScreener + Binance)</title>
+<style>
+  :root { --bg:#0b0f13; --card:#141a21; --text:#e8eef6; --muted:#9db0c2; --accent:#4fd1c5; --bad:#ff7878; --good:#8be28b;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  header{padding:18px 20px;text-align:center;border-bottom:1px solid #1e2630;background:linear-gradient(180deg,#0f141a,#0b0f13)}
+  main{max-width:1100px;margin:22px auto;padding:0 14px 60px}
+  h1{margin:0;font-size:20px}
+  h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:700}
+  .card{background:var(--card);border:1px solid #1f2933;border-radius:14px;padding:16px;margin:12px 0;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  label{display:block;font-size:12px;color:var(--muted);margin:8px 0 6px}
+  input{width:100%;padding:11px;border-radius:10px;background:#0d1217;border:1px solid #243140;color:var(--text);font-size:14px}
+  input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,209,197,.12)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn{cursor:pointer;background:var(--accent);color:#052b27;border:0;border-radius:10px;padding:10px 14px;font-weight:700}
+  .btn.secondary{background:#0f171f;color:var(--muted);border:1px solid #223041}
+  .pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#0f171f;border:1px solid #223041;color:var(--muted);font-size:12px}
+  .ok{color:var(--good)} .warn{color:var(--bad)}
+  details{border:1px solid #223041;border-radius:12px;padding:10px 12px;background:#0f141a}
+  summary{cursor:pointer;color:var(--muted)}
+  table{width:100%;border-collapse:separate;border-spacing:0 10px}
+  th, td{padding:12px 14px;text-align:left}
+  th{color:var(--muted);font-weight:600}
+  tr.cardrow{background:#0f141a;border:1px solid #1f2a35}
+  tr.cardrow td:first-child{border-top-left-radius:10px;border-bottom-left-radius:10px}
+  tr.cardrow td:last-child{border-top-right-radius:10px;border-bottom-right-radius:10px}
+  .pos{margin-top:14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Farming / Staking Tracker</h1>
+  <div class="pill">Live price: DexScreener (pair) + Binance (ETH)</div>
+</header>
+
+<main>
+  <div class="card">
+    <h2>Tambah Posisi</h2>
+    <div class="grid">
+      <div>
+        <label>Nama Posisi</label>
+        <input id="name" placeholder="Contoh: CARV/USDC Staking" />
+      </div>
+      <div style="grid-column: span 2;">
+        <label>DexScreener Pair URL</label>
+        <input id="pairUrl" placeholder="https://dexscreener.com/base/<pair>" />
+      </div>
+      <div>
+        <label>Base Symbol (token utama)</label>
+        <input id="baseSym" placeholder="ex: CARV / ZORA" />
+      </div>
+      <div>
+        <label>Quote Symbol</label>
+        <input id="quoteSym" placeholder="ex: USDC / WETH" />
+      </div>
+    </div>
+
+    <details class="pos">
+      <summary>Modal Awal</summary>
+      <div class="grid" style="margin-top:8px">
+        <div>
+          <label>Base awal (jumlah token)</label>
+          <input id="initBase" placeholder="ex: 22930" />
+        </div>
+        <div>
+          <label>Quote awal (USDC/WETH)</label>
+          <input id="initQuote" placeholder="ex: 318" />
+        </div>
+        <div>
+          <label>Entry Price Base (USD) — opsional</label>
+          <input id="entryPrice" placeholder="ex: 0.12 (kalau diisi → hitung True PnL)" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <span class="small" style="color:#9db0c2">Kalau tidak mengisi Entry Price, PnL dihitung vs modal “mark-to-market” (pakai harga sekarang) → lebih cocok lihat efek rebalancing/IL.</span>
+      </div>
+    </details>
+
+    <details class="pos">
+      <summary>Posisi Sekarang</summary>
+      <div class="grid" style="margin-top:8px">
+        <div>
+          <label>Base sekarang</label>
+          <input id="nowBase" placeholder="jumlah token base di wallet/LP" />
+        </div>
+        <div>
+          <label>Quote sekarang</label>
+          <input id="nowQuote" placeholder="jumlah quote" />
+        </div>
+      </div>
+    </details>
+
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="add">Tambah ke daftar</button>
+      <button class="btn secondary" id="addCarv">Quick add: CARV/USDC (318 USDC + 22930 CARV)</button>
+      <span class="pill" id="status">Idle</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Daftar Posisi</h2>
+    <div id="list"></div>
+  </div>
+</main>
+
+<script>
+/* ====== Helpers ====== */
+const $ = (id)=>document.getElementById(id);
+function parseFlex(v){ v=String(v??'').trim().replace(/\s/g,'').replace(',', '.'); if(!v) return NaN; const n=Number(v); return isFinite(n)?n:NaN; }
+function fmt(n,d=6){ if(!isFinite(n)) return '–'; return Number(n).toLocaleString(undefined,{maximumFractionDigits:d}); }
+function setStatus(s){ $('status').textContent=s; }
+function save(state){ localStorage.setItem('farms', JSON.stringify(state)); }
+function load(){ try{ return JSON.parse(localStorage.getItem('farms')||'[]'); }catch{ return [];} }
+
+/* ====== Price fetchers ====== */
+async function fetchEthUsd(){
+  try{
+    const r = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT',{cache:'no-store'});
+    const j = await r.json(); const px = Number(j.price);
+    if(!isFinite(px)) throw new Error('bad ETH'); return px;
+  }catch(e){ return NaN; }
+}
+async function fetchPair(pairUrl){
+  const u = new URL(pairUrl);
+  const [chain,pair] = u.pathname.split('/').filter(Boolean);
+  const r = await fetch(`https://api.dexscreener.com/latest/dex/pairs/${chain}/${pair}`, {cache:'no-store'});
+  return r.json(); // {pair:{ priceUsd, baseToken{symbol}, quoteToken{symbol} ... }}
+}
+
+/* ====== Calculations per position ====== */
+async function computePosition(p){
+  // Fetch pair + maybe ETH
+  const j = await fetchPair(p.pairUrl);
+  const priceUsd = Number(j?.pair?.priceUsd);          // base token USD
+  const baseSym = p.baseSym || j?.pair?.baseToken?.symbol || 'BASE';
+  const quoteSym = p.quoteSym || j?.pair?.quoteToken?.symbol || 'QUOTE';
+
+  let quoteUsd = 1; let ethUsd = NaN;
+  if(['USDC','USDT','USDCE','USDC.E','DAI'].includes(quoteSym.toUpperCase())){
+    quoteUsd = 1;
+  }else if(['WETH','ETH'].includes(quoteSym.toUpperCase())){
+    ethUsd = await fetchEthUsd();
+    quoteUsd = ethUsd;
+  }else{
+    // fallback: coba harga quote dari pair kalau ada
+    quoteUsd = Number(j?.pair?.quotePriceUsd);
+  }
+
+  // Values
+  const initBase = parseFlex(p.initBase);
+  const initQuote= parseFlex(p.initQuote);
+  const nowBase  = parseFlex(p.nowBase);
+  const nowQuote = parseFlex(p.nowQuote);
+  const entry    = parseFlex(p.entryPrice); // optional
+
+  const nowUsd   = nowBase * priceUsd + nowQuote * quoteUsd;
+
+  // modal at entry (true) if entry given
+  let modalUsdTrue = NaN;
+  if(isFinite(entry)) modalUsdTrue = initBase * entry + initQuote * quoteUsd;
+
+  // modal mark-to-market (for IL view)
+  const modalUsdMTM = initBase * priceUsd + initQuote * quoteUsd;
+
+  // PnL
+  const pnlTrue = isFinite(modalUsdTrue) ? nowUsd - modalUsdTrue : NaN;
+  const pnlMtm  = nowUsd - modalUsdMTM;
+
+  // Token deltas (composition drift)
+  const dBase = nowBase - initBase;
+  const dQuote = nowQuote - initQuote;
+
+  return {
+    baseSym, quoteSym, priceUsd, quoteUsd, ethUsd,
+    nowUsd, modalUsdTrue, modalUsdMTM, pnlTrue, pnlMtm, dBase, dQuote
+  };
+}
+
+/* ====== UI list render ====== */
+async function render(){
+  const state = load();
+  const root = $('list'); root.innerHTML = '';
+  if(state.length===0){ root.innerHTML = '<div class="small">Belum ada posisi. Tambah dulu di atas.</div>'; return; }
+
+  for(let i=0;i<state.length;i++){
+    const p = state[i];
+    let data = null; let err = null;
+    try{ data = await computePosition(p); }catch(e){ err = e; }
+
+    const card = document.createElement('div'); card.className = 'card';
+    const head = document.createElement('div');
+    head.innerHTML = `<div class="row" style="justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:700">${p.name || 'Posisi '+(i+1)}</div>
+        <div class="small">${p.baseSym || data?.baseSym || ''}/${p.quoteSym || data?.quoteSym || ''} — <a href="${p.pairUrl}" target="_blank" style="color:#8bbbd0;text-decoration:none">pair</a></div>
+      </div>
+      <div class="row">
+        <button class="btn secondary" data-edit="${i}">Edit</button>
+        <button class="btn secondary" data-del="${i}">Hapus</button>
+      </div>
+    </div>`;
+    card.appendChild(head);
+
+    const body = document.createElement('div'); body.style.marginTop='12px';
+
+    if(!data || !isFinite(data.priceUsd)){
+      body.innerHTML = `<span class="pill">Fetch gagal — cek URL pair</span>`;
+    }else{
+      const trueLine = isFinite(data.pnlTrue)
+        ? `<tr class="cardrow"><td>PNL (True, pakai Entry Price)</td><td>$ ${fmt(data.pnlTrue,2)}</td><td>${(data.pnlTrue>=0?'<span class="ok">+</span>':'<span class="warn">')}</span>${fmt((data.pnlTrue/(data.modalUsdTrue||1))*100,2)} %</td></tr>`
+        : '';
+
+      body.innerHTML = `
+      <table>
+        <thead><tr><th>Metrix</th><th>USD</th><th>Info</th></tr></thead>
+        <tbody>
+          <tr class="cardrow"><td>Harga ${p.baseSym || data.baseSym}</td><td>$ ${fmt(data.priceUsd,6)}</td><td></td></tr>
+          <tr class="cardrow"><td>Modal (mark-to-market)</td><td>$ ${fmt(data.modalUsdMTM,2)}</td><td> valued pakai harga sekarang</td></tr>
+          ${ isFinite(data.modalUsdTrue) ? `<tr class="cardrow"><td>Modal (True @ Entry)</td><td>$ ${fmt(data.modalUsdTrue,2)}</td><td>pakai Entry Price</td></tr>` : '' }
+          <tr class="cardrow"><td>Nilai sekarang</td><td>$ ${fmt(data.nowUsd,2)}</td><td></td></tr>
+          ${trueLine}
+          <tr class="cardrow"><td>Δ vs Modal (mark-to-market)</td><td>$ ${fmt(data.pnlMtm,2)}</td><td>${data.pnlMtm>=0?'<span class="ok">+</span>':'<span class="warn">–</span>'} rebalancing/IL view</td></tr>
+          <tr class="cardrow"><td>Δ Base token</td><td>${fmt(data.dBase)} ${p.baseSym || data.baseSym}</td><td>sekarang − awal</td></tr>
+          <tr class="cardrow"><td>Δ Quote token</td><td>${fmt(data.dQuote)} ${p.quoteSym || data.quoteSym}</td><td>sekarang − awal</td></tr>
+        </tbody>
+      </table>`;
+    }
+    card.appendChild(body);
+    root.appendChild(card);
+
+    // actions
+    card.querySelector(`[data-del="${i}"]`).onclick = ()=>{
+      const s = load(); s.splice(i,1); save(s); render();
+    };
+    card.querySelector(`[data-edit="${i}"]`).onclick = ()=>{
+      // load back into form for quick edit
+      $('name').value = p.name;
+      $('pairUrl').value = p.pairUrl;
+      $('baseSym').value = p.baseSym;
+      $('quoteSym').value= p.quoteSym;
+      $('initBase').value= p.initBase;
+      $('initQuote').value=p.initQuote;
+      $('entryPrice').value=p.entryPrice;
+      $('nowBase').value = p.nowBase;
+      $('nowQuote').value = p.nowQuote;
+      window.scrollTo({top:0,behavior:'smooth'});
+    };
+  }
+}
+
+/* ====== Add position ====== */
+function readForm(){
+  return {
+    name: $('name').value.trim(),
+    pairUrl: $('pairUrl').value.trim(),
+    baseSym: $('baseSym').value.trim(),
+    quoteSym:$('quoteSym').value.trim(),
+    initBase: $('initBase').value.trim(),
+    initQuote:$('initQuote').value.trim(),
+    entryPrice:$('entryPrice').value.trim(),
+    nowBase:  $('nowBase').value.trim(),
+    nowQuote: $('nowQuote').value.trim(),
+  };
+}
+$('add').addEventListener('click', ()=>{
+  const p = readForm();
+  if(!p.pairUrl){ setStatus('Isi URL pair dulu'); return; }
+  const s = load(); s.push(p); save(s); setStatus('Disimpan'); render();
+});
+$('addCarv').addEventListener('click', ()=>{
+  $('name').value = 'CARV/USDC Staking';
+  $('pairUrl').value = 'https://dexscreener.com/base/0xff862675c47b6a2c9072dcbe2f37a78a445c4f37';
+  $('baseSym').value = 'CARV';
+  $('quoteSym').value = 'USDC';
+  $('initBase').value = '22930';
+  $('initQuote').value = '318';
+  $('nowBase').value = '';
+  $('nowQuote').value = '';
+  $('entryPrice').value = '';
+  setStatus('Preset CARV/USDC terisi — lengkapi posisi sekarang lalu klik "Tambah ke daftar"');
+});
+
+/* ====== Auto refresh list ====== */
+let timer=null;
+async function refreshLoop(){
+  await render();
+  const sec = 20;
+  if(timer) clearTimeout(timer);
+  timer = setTimeout(refreshLoop, sec*1000);
+}
+
+render();
+refreshLoop();
+</script>
+</body>
+</html>
