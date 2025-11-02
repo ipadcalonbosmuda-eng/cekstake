@@ -14,8 +14,8 @@
   h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:700}
   .card{background:var(--card);border:1px solid #1f2933;border-radius:14px;padding:16px;margin:12px 0;box-shadow:0 10px 30px rgba(0,0,0,.25)}
   label{display:block;font-size:12px;color:var(--muted);margin:8px 0 6px}
-  input{width:100%;padding:11px;border-radius:10px;background:#0d1217;border:1px solid #243140;color:var(--text);font-size:14px}
-  input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,209,197,.12)}
+  input, select{width:100%;padding:11px;border-radius:10px;background:#0d1217;border:1px solid #243140;color:var(--text);font-size:14px}
+  input:focus, select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,209,197,.12)}
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .btn{cursor:pointer;background:var(--accent);color:#052b27;border:0;border-radius:10px;padding:10px 14px;font-weight:700}
@@ -37,16 +37,23 @@
 <body>
 <header>
   <h1>Hedged Composition Calculator (Base Dipinjam)</h1>
-  <div class="small">Masukkan URL DexScreener pair. Kalkulasi fokus ke <b>USDC milikmu</b> & kewajiban <b>mengembalikan base token</b> (CARV dll).</div>
+  <div class="small">Masukkan URL DexScreener pair atau pilih dari preset. Fokus ke <b>USDC milikmu</b> & kewajiban <b>balikkan base token</b>.</div>
 </header>
 
 <main>
   <div class="card">
     <h2>1) Pair & Harga</h2>
     <div class="grid">
+      <div>
+        <label>Pick pair (preset DexScreener)</label>
+        <select id="pairPreset">
+          <option value="">— pilih pair preset —</option>
+          <!-- options akan diisi otomatis (RECALL/USDC, CARV/USDC, dll) -->
+        </select>
+      </div>
       <div style="grid-column:span 2">
-        <label>DexScreener Pair URL (contoh: https://dexscreener.com/base/0xff86...)</label>
-        <input id="pairUrl" />
+        <label>DexScreener Pair URL (bisa tempel manual)</label>
+        <input id="pairUrl" placeholder="https://dexscreener.com/base/<pairAddress>" />
       </div>
       <div>
         <label>Refresh interval (detik)</label>
@@ -71,7 +78,7 @@
         <input id="baseDebt" value="0" />
       </div>
     </div>
-    <div class="small">Contoh: kamu minjem 10,000 CARV → isi 10000 di “utang base”.</div>
+    <div class="small">Contoh: minjem 10,000 CARV → isi 10000 di “utang base”.</div>
   </div>
 
   <div class="card">
@@ -122,6 +129,49 @@ function parseFlex(v){ v=String(v??'').trim().replace(/\s/g,'').replace(',', '.'
 function fmt(n,d=6){ if(!isFinite(n)) return '–'; return Number(n).toLocaleString(undefined,{maximumFractionDigits:d}); }
 function setStatus(s){ $('status').textContent=s; }
 
+// ====== PRESET PAIRS (URLs dari kamu) ======
+const PRESET_URLS = [
+  'https://dexscreener.com/base/0x5e3791f68ebceac82788f3becab154c15141a2f4', // RECALL/USDC (akan diberi nama otomatis)
+  'https://dexscreener.com/base/0xff862675c47b6a2c9072dcbe2f37a78a445c4f37', // CARV/USDC
+  'https://dexscreener.com/base/0x04f0c5d0e2fc9329f08e0112a37d7d9b7cff1043', // (auto-name)
+  'https://dexscreener.com/base/0x7af45dfaf2fdea139b2295f37ffea2e16e6fd8ba', // (auto-name)
+];
+
+// build preset dropdown labels by fetching pair symbols
+async function buildPresetOptions(){
+  const sel = $('pairPreset');
+  // clear except first
+  sel.length = 1;
+  for(const url of PRESET_URLS){
+    try{
+      const u = new URL(url);
+      const [chain, pair] = u.pathname.split('/').filter(Boolean);
+      const r = await fetch(`https://api.dexscreener.com/latest/dex/pairs/${chain}/${pair}`, {cache:'no-store'});
+      const j = await r.json();
+      const base = (j?.pair?.baseToken?.symbol || 'BASE').toUpperCase();
+      const quote= (j?.pair?.quoteToken?.symbol || 'QUOTE').toUpperCase();
+      const opt = document.createElement('option');
+      opt.value = url;
+      opt.textContent = `${base}/${quote}`;
+      sel.appendChild(opt);
+    }catch(e){
+      const opt = document.createElement('option');
+      opt.value = url;
+      opt.textContent = `Pair (load fail) • ${url.slice(-8)}`;
+      sel.appendChild(opt);
+    }
+  }
+}
+
+// when user picks preset, copy to input and refresh
+$('pairPreset').addEventListener('change', ()=>{
+  const v = $('pairPreset').value;
+  if(v){
+    $('pairUrl').value = v;
+    refreshNow();
+  }
+});
+
 async function fetchEthUsd(){
   try{
     const r=await fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT',{cache:'no-store'});
@@ -150,13 +200,11 @@ async function refreshNow(){
     const baseUsd  = Number(j?.pair?.priceUsd);
     if(!isFinite(baseUsd)) throw new Error('Harga base tidak valid');
 
-    // Harga quote (USDC=1, WETH=Binance, else: coba quotePriceUsd)
     let quoteUsd=1;
     if(['USDC','USDT','DAI','USDCE','USDC.E'].includes(quoteSym)){ quoteUsd=1; }
     else if(['WETH','ETH'].includes(quoteSym)){ quoteUsd=await fetchEthUsd(); }
     else { const qp=Number(j?.pair?.quotePriceUsd); if(isFinite(qp)) quoteUsd=qp; }
 
-    // Inputs
     const initialUsdc = parseFlex($('initialUsdc').value);
     const baseDebt    = parseFlex($('baseDebt').value);
     const baseNow     = parseFlex($('baseNow').value);
@@ -164,31 +212,23 @@ async function refreshNow(){
     const feePct      = Math.max(0, parseFlex($('feePct').value)||0)/100;
     if(![initialUsdc,baseDebt,baseNow,quoteNow].every(isFinite)) { setStatus('Isi semua angka'); return; }
 
-    // Gap base (positif = kekurangan token base yg harus ditebus)
-    const baseGap = baseDebt - baseNow;          // >0 short, <0 surplus
+    const baseGap = baseDebt - baseNow;          
     const baseGapAbs = Math.abs(baseGap);
 
-    // USDC needed/left to fully repay the debt (apply fee on the side you trade)
-    // Kalau short base → beli base: biaya di-apply pada USDC yang dipakai
     const usdcNeededRaw = (baseGap>0) ? baseGap * baseUsd : 0;
     const usdcNeeded    = (baseGap>0) ? usdcNeededRaw * (1 + feePct) : 0;
 
-    // Kalau surplus base → bisa dijual ke USDC, biaya di-apply pada hasil
     const usdcFromSurplusRaw = (baseGap<0) ? baseGapAbs * baseUsd : 0;
     const usdcFromSurplus    = (baseGap<0) ? usdcFromSurplusRaw * (1 - feePct) : 0;
 
     const quoteUsdNow = quoteNow * quoteUsd;
 
-    // Net USDC jika ditutup sekarang (setelah repay sampai pas lunas)
-    // rumus umum: USDC_now + (base_now - baseDebt)*price_base, lalu terapkan fee kira-kira:
     const netUsdcIfClose = quoteUsdNow + (baseNow - baseDebt) * baseUsd
                            - (baseGap>0 ? feePct*usdcNeededRaw : 0)
                            - (baseGap<0 ? feePct*usdcFromSurplusRaw : 0);
 
-    // PnL vs modal USDC
     const pnl = netUsdcIfClose - initialUsdc;
 
-    // Render KPI
     $('kpiPair').textContent = `${baseSym}/${quoteSym}`;
     $('kpiBaseUsd').textContent  = '$ ' + fmt(baseUsd,6);
     $('kpiQuoteUsd').textContent = '$ ' + fmt(quoteUsd,6);
@@ -202,7 +242,6 @@ async function refreshNow(){
     $('kpiPnl').textContent = (pnl>=0?'+ ':'- ') + '$ ' + fmt(Math.abs(pnl),2);
     $('kpiPnl').className = 'value ' + (pnl>=0?'ok':'warn');
 
-    // Table detail
     const tb=$('tbody'); tb.innerHTML='';
     tb.appendChild(row(`Kekurangan/Surplus ${baseSym}`, 
       baseGap>0?`${fmt(baseGap)} ${baseSym}`: baseGap<0?`${fmt(baseGapAbs)} ${baseSym}`:'0', 
@@ -211,14 +250,12 @@ async function refreshNow(){
     ));
     tb.appendChild(row('USDC sekarang (quote)', fmt(quoteNow)+' '+quoteSym, '$ '+fmt(quoteUsdNow,2), 'Milikmu'));
     if(baseGap>0){
-      tb.appendChild(row('USDC dibutuhkan untuk beli base', '—', '$ '+fmt(usdcNeeded,2), feePct?`Termasuk fee ~${(feePct*100).toFixed(2)}%`:''));
-      tb.appendChild(row('Sisa/kurang USDC setelah lunasi',
-        '—',
-        '$ '+fmt(quoteUsdNow - usdcNeeded,2),
+      tb.appendChild(row('USDC dibutuhkan untuk beli base', '—', '$ '+fmt(usdcNeeded,2), feePct?`Termasuk fee ~${(feePct*100).toFixed(2)}%`:'' ));
+      tb.appendChild(row('Sisa/kurang USDC setelah lunasi', '—', '$ '+fmt(quoteUsdNow - usdcNeeded,2),
         (quoteUsdNow>=usdcNeeded?'✅ Cukup USDC':'❌ USDC kurang, perlu tambah')
       ));
     }else if(baseGap<0){
-      tb.appendChild(row(`USDC dari jual surplus ${baseSym}`, '—', '$ '+fmt(usdcFromSurplus,2), feePct?`Neto sesudah fee`:''));
+      tb.appendChild(row(`USDC dari jual surplus ${baseSym}`, '—', '$ '+fmt(usdcFromSurplus,2), feePct?`Neto sesudah fee`:'' ));
       tb.appendChild(row('USDC total setelah lunasi', '—', '$ '+fmt(quoteUsdNow + usdcFromSurplus,2), 'Estimasi jika surplus dijual'));
     }
     tb.appendChild(row('Net USDC jika ditutup sekarang', '—', '$ '+fmt(netUsdcIfClose,2), 'Quote + (Base-utang)×harga (termasuk fee kira-kira)'));
@@ -244,7 +281,9 @@ function startAuto(){
 $('intervalSec').addEventListener('input', startAuto);
 
 // init
-refreshNow(); startAuto();
+buildPresetOptions(); // <-- isi dropdown dari 4 URL
+refreshNow(); 
+startAuto();
 </script>
 </body>
 </html>
